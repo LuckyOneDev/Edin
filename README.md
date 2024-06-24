@@ -1,0 +1,1 @@
+Yedin js is a small backend-agnostic synchronisation library for javascript.

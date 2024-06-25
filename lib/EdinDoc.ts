@@ -1,11 +1,17 @@
 import { produce } from "immer";
-import { createPatch } from "rfc6902";
+import { Operation, createPatch } from "rfc6902";
 import { EdinBackend } from "./EdinBackend";
+
+export interface IEdinDoc<T = unknown> {
+	id: string;
+	version: number;
+	content: T;
+}
 
 /**
  * Atomic syncronised structure.
  */
-export class EdinDoc<T = unknown> {
+export class EdinDoc<T = unknown> implements IEdinDoc<T> {
 	/**
 	 * Document identifier.
 	 */
@@ -36,6 +42,9 @@ export class EdinDoc<T = unknown> {
 		this.version = 0;
 	}
 
+	#updateQueue: Operation[] = [];
+	#updateTimeout: ReturnType<typeof setTimeout> | null = null;
+	
 	/**
 	 * Updates document content.
 	 * @param updater Content updater function.
@@ -49,13 +58,36 @@ export class EdinDoc<T = unknown> {
 		const changes = createPatch(initialState, newState);
 		this.setState(newState);
 
-		this.#edin.updateDocument({
-			issuerId: id,
-			docId: this.id,
-			ops: changes,
-			time: new Date().toISOString(),
-			version: this.version
-		});
+		// Send out updates every 50ms
+		this.#updateQueue.push(...changes);
+		if (!this.#updateTimeout) {
+			this.#updateTimeout = setTimeout(() => {
+				this.version++;
+				this.#updateTimeout = null;
+				this.#edin.updateDocument({
+					issuerId: id,
+					docId: this.id,
+					ops: this.#updateQueue,
+					time: new Date().toISOString(),
+					version: this.version
+				}).catch((e) => {
+					console.error(`Failed to update document ${this.id}`);
+				});
+
+				this.#updateQueue = [];
+			}, 50);
+		}
+	}
+
+	/**
+	 * Destroys the document, clearing any updates and removing the document from server.
+	 */
+	destroy() {
+		if (this.#updateTimeout) {
+			clearTimeout(this.#updateTimeout);
+			this.#updateTimeout = null;
+		}
+		this.#edin.removeDocument(this.id);
 	}
 
 	/**
@@ -78,7 +110,6 @@ export class EdinDoc<T = unknown> {
 	 */
 	setState(content: T) {
 		this.content = content;
-		this.version++;
 		this.#eventListeners.forEach((handler) => {
 			handler(content);
 		});

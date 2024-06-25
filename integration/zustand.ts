@@ -1,8 +1,8 @@
 import { StateCreator } from "zustand";
-import { EdinFactory } from "../lib/EdinFactory";
+import { EdinClient } from "../lib/EdinClient";
 
 // Middleware for synchronizing zustand store with Edin.
-export const edin = <T>(stateCreator: StateCreator<T>, Edin: EdinFactory, identifier: string): StateCreator<T> => {
+export const edin = <T>(stateCreator: StateCreator<T>, Edin: EdinClient, identifier: string): StateCreator<T> => {
 	return (set, get, api) => {
 		// Get an initial state to send to server
 		const initialState = stateCreator(set, get, api);

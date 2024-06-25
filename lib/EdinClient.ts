@@ -9,7 +9,7 @@ import { produce } from "immer";
  * Every document is managed here.
  */
 
-export class EdinFactory {
+export class EdinClient {
 	/**
 	* Local index of documents.
 	  */
@@ -55,20 +55,17 @@ export class EdinFactory {
 	doc<T>(identifier: string, content: T): EdinDoc<T> {
 		// Get rid of unserializable state
 		const sanitizedContent = JSON.parse(JSON.stringify(content));
+		const doc = new EdinDoc<T>(this.backend, identifier, sanitizedContent);
 
 		const request = () => {
 			this.backend.getDocument(identifier, sanitizedContent as object).then((serverDoc) => {
 				if (serverDoc) {
-					const localDoc = this.docs.get(identifier);
-					if (localDoc) {
-						localDoc.version = serverDoc.version;
-						localDoc.setState(serverDoc.content);
-					}
+					doc.version = serverDoc.version;
+					doc.setState(serverDoc.content as T);
 				}
 			});
 		}
 
-		const doc = new EdinDoc<T>(this.backend, identifier, sanitizedContent);
 		this.docs.set(identifier, doc as EdinDoc);
 
 		if (this.isReady) {
@@ -80,27 +77,32 @@ export class EdinFactory {
 		return doc;
 	}
 
+	async #updateDesynced(doc: EdinDoc, update: EdinUpdate) {
+		this.backend.getDocument(update.docId, {}).then((serverDoc) => {
+			const updatedContent = produce(doc.content, (draft) => {
+				Object.apply(draft, serverDoc.content);
+			});
+			doc.setState(updatedContent);
+			doc.version = serverDoc.version;
+		});
+	}
+
 	async onDocumentUpdated(update: EdinUpdate): Promise<void> {
-		if (!this.docs.has(update.docId) || update.ops.length === 0 || update.issuerId === this.backend.getClientId()) {
+		if (!this.docs.has(update.docId) || update.ops.length === 0) {
 			return;
 		}
 
 		const doc = this.docs.get(update.docId)!;
-		
+
 		if (doc.version + 1 === update.version) {
 			// Version is OK. No desync here
 			const updatedContent = produce(doc.content, (draft) => {
 				applyPatch(draft, update.ops);
 			});
 			doc.setState(updatedContent);
+			doc.version = update.version;
 		} else {
-			// Desync. Pull version from server.
-			this.backend.getDocument(update.docId, {}).then((serverDoc) => {
-				const updatedContent = produce(doc.content, (draft) => {
-					Object.apply(draft, serverDoc.content);
-				});
-				doc.setState(updatedContent);
-			});
+			this.#updateDesynced(doc, update);
 		}
 	}
 

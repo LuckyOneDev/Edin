@@ -1,7 +1,7 @@
 import { Operation, applyPatch } from "rfc6902";
 import { EdinUpdate } from "./EdinUpdate";
 import { EdinDoc } from "./EdinDoc";
-import { EdinFactory } from "./EdinFactory";
+import { EdinClient } from "./EdinClient";
 
 /**
  * Backend for Edin.
@@ -38,10 +38,10 @@ export interface EdinBackend {
 	/**
 	 * Binds Edin update listener.
 	 */
-	bindUpdateListener(listener: typeof EdinFactory.prototype.onDocumentUpdated): void;
+	bindUpdateListener(listener: typeof EdinClient.prototype.onDocumentUpdated): void;
 	
 	/**
 	 * Binds Edin remove listener.
 	 */
-	bindRemoveListener(listener: typeof EdinFactory.prototype.onDocumentRemoved): void;
+	bindRemoveListener(listener: typeof EdinClient.prototype.onDocumentRemoved): void;
 }

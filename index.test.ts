@@ -1,8 +1,10 @@
 import { describe, expect, test } from '@jest/globals';
 import { EdinClient } from "./lib/EdinClient";
 import { TestBackend } from "./test/TestBackend";
+import { create } from 'zustand';
+import { edin } from './integration/zustand';
 
-describe("Edin", () => {
+describe("Basic", () => {
 	test("New data should be put to server", () => {
 		const backend = new TestBackend();
 		const Edin = new EdinClient(backend);
@@ -35,7 +37,7 @@ describe("Edin", () => {
 				expect(content.test).toBe(2);
 				resolve();
 			});
-		})
+		});
 	});
 
 	test("Data should be updated on server", () => {
@@ -98,6 +100,113 @@ describe("Edin", () => {
 			
 			doc1.update((content) => {
 				content.test = 9
+			});
+		})
+	});
+});
+
+describe("Zustand", () => {
+	test("Zustand should sync data from server", () => {
+		const backend = new TestBackend();
+		backend.docs.set("test", {
+			id: "test",
+			version: 4,
+			content: { test: 2 }
+		});
+
+		const Edin = new EdinClient(backend);
+		Edin.start();
+
+		const testStore = create<{ test: number, setTest: (value: number) => void }>(edin((set) => ({
+			test: 0,
+			setTest: (value: number) => {
+				set({ test: value });
+			}
+		}), Edin, "test"));
+
+		return new Promise<void>((resolve) => {
+			testStore.subscribe((state) => {
+				expect(state.test).toBe(2);
+				resolve();
+			});
+		});
+	});
+
+	test("Zustand should update data on server (setState)", () => {
+		const backend = new TestBackend();
+		
+		const Edin = new EdinClient(backend);
+		Edin.start();
+		
+		const testStore = create<{ test: number, setTest: (value: number) => void }>(edin((set) => ({
+			test: 0,
+			setTest: (value: number) => {
+				set({ test: value });
+			}
+		}), Edin, "test"));
+
+		return new Promise<void>((resolve) => {
+			backend.updateListeners.push((update) => {
+				const serverContent = backend.docs.get("test")?.content as { test: number };
+				expect(serverContent.test).toBe(9);
+				resolve();
+			});
+
+			testStore.setState({ test: 9 })
+		})
+	});
+
+	test("Zustand should update data on server (setter method)", () => {
+		const backend = new TestBackend();
+		
+		const Edin = new EdinClient(backend);
+		Edin.start();
+		
+		const testStore = create<{ test: number, setTest: (value: number) => void }>(edin((set) => ({
+			test: 0,
+			setTest: (value: number) => {
+				set({ test: value });
+			}
+		}), Edin, "test"));
+
+		return new Promise<void>((resolve) => {
+			backend.updateListeners.push((update) => {
+				const serverContent = backend.docs.get("test")?.content as { test: number };
+				expect(serverContent.test).toBe(9);
+				resolve();
+			});
+
+			testStore.getState().setTest(9);
+		})
+	});
+
+	test("Zustand should recieve updates from server", () => {
+		const backend = new TestBackend();
+		
+		const Edin = new EdinClient(backend);
+		Edin.start();
+		
+		const testStore = create<{ test: number, setTest: (value: number) => void }>(edin((set) => ({
+			test: 0,
+			setTest: (value: number) => {
+				set({ test: value });
+			}
+		}), Edin, "test"));
+
+		return new Promise<void>((resolve) => {
+			testStore.subscribe((state) => {
+				expect(state.test).toBe(9);
+				resolve();
+			});
+			
+			backend.updateDocument({
+				docId: "test",
+				ops: [
+					{ op: "replace", path: "/test", value: 9 }
+				],
+				issuerId: "test",
+				time: new Date().toISOString(),
+				version: 5
 			});
 		})
 	});

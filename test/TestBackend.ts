@@ -35,7 +35,7 @@ export class TestBackend implements EdinBackend {
 
 	updateDocument(update: EdinUpdate): Promise<void> {
 		const doc = this.docs.get(update.docId);
-		console.log(update);
+
 		if (doc) {
 			let result: ReturnType<typeof applyPatch> = [];
 			const newState = produce(doc.content, (draft) => {

@@ -1,6 +1,6 @@
 {
   "name": "edin",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "description": "Backend and frontend agnostic synchronization library",
   "main": "index.ts",
   "repository": "https://github.com/LuckyOneDev/Edin",
@@ -19,6 +19,6 @@
     "rfc6902": "^5.1.1"
   },
   "optionalDependencies": {
-	"zustand": "^4.5.2"
+    "zustand": "^4.5.2"
   }
 }

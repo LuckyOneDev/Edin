@@ -65,17 +65,10 @@ export class EdinDoc<T = unknown> implements IEdinDoc<T> {
 				this.version++;
 				this.#updateTimeout = null;
 
-				// Merge update Queue
-				const newState = produce(this.content, (draft) => {
-					applyPatch(draft, this.#updateQueue);
-				});
-
-				const ops = createPatch(this.content, newState);
-
 				this.#edin.updateDocument({
 					issuerId: id,
 					docId: this.id,
-					ops: ops,
+					ops: this.#updateQueue,
 					time: new Date().toISOString(),
 					version: this.version
 				}).catch((e) => {

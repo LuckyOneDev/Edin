@@ -1,5 +1,5 @@
 import { produce } from "immer";
-import { Operation, createPatch } from "rfc6902";
+import { Operation, applyPatch, createPatch } from "rfc6902";
 import { EdinBackend } from "./EdinBackend";
 
 export interface IEdinDoc<T = unknown> {
@@ -64,10 +64,18 @@ export class EdinDoc<T = unknown> implements IEdinDoc<T> {
 			this.#updateTimeout = setTimeout(() => {
 				this.version++;
 				this.#updateTimeout = null;
+
+				// Merge update Queue
+				const newState = produce(this.content, (draft) => {
+					applyPatch(draft, this.#updateQueue);
+				});
+
+				const ops = createPatch(this.content, newState);
+
 				this.#edin.updateDocument({
 					issuerId: id,
 					docId: this.id,
-					ops: this.#updateQueue,
+					ops: ops,
 					time: new Date().toISOString(),
 					version: this.version
 				}).catch((e) => {

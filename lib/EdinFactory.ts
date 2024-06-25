@@ -87,7 +87,7 @@ export class EdinFactory {
 
 		const doc = this.docs.get(update.docId)!;
 		
-		if (update.version < this.docs.get(update.docId)!.version + 1) {
+		if (doc.version + 1 === update.version) {
 			// Version is OK. No desync here
 			const updatedContent = produce(doc.content, (draft) => {
 				applyPatch(draft, update.ops);

@@ -29,13 +29,19 @@ export interface EdinBackend {
 	removeDocument(identifier: string): Promise<void>;
 
 	/**
-	 *
+	 * Sends out EdinUpdate.
 	 * @param identifier Document identifier.
 	 * @param update
 	 */
 	updateDocument(update: EdinUpdate): Promise<void>;
 
+	/**
+	 * Binds Edin update listener.
+	 */
 	bindUpdateListener(listener: typeof EdinFactory.prototype.onDocumentUpdated): void;
 	
+	/**
+	 * Binds Edin remove listener.
+	 */
 	bindRemoveListener(listener: typeof EdinFactory.prototype.onDocumentRemoved): void;
 }

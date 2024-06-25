@@ -48,7 +48,7 @@ export class EdinDoc<T = unknown> {
 		const newState = produce(initialState, updater);
 		const changes = createPatch(initialState, newState);
 		this.setState(newState);
-		
+
 		this.#edin.updateDocument({
 			issuerId: id,
 			docId: this.id,
@@ -73,6 +73,7 @@ export class EdinDoc<T = unknown> {
 
 	/**
 	 * Notifies all subscribed event listeners about document changes.
+	 * Does not send network request. Should only be used internally.
 	 * @param content New document content.
 	 */
 	setState(content: T) {

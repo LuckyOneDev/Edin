@@ -1,17 +1,18 @@
 import { produce } from "immer";
 import { Operation, applyPatch, createPatch } from "rfc6902";
 import { EdinBackend } from "./EdinBackend";
+import { EdinUpdate } from "./EdinUpdate";
 
-export interface IEdinDoc<T = unknown> {
+export interface IEdinDoc {
 	id: string;
 	version: number;
-	content: T;
+	content: unknown;
 }
 
 /**
  * Atomic syncronised structure.
  */
-export class EdinDoc<T = unknown> implements IEdinDoc<T> {
+export class EdinDoc<T = unknown> implements IEdinDoc {
 	/**
 	 * Document identifier.
 	 */
@@ -45,49 +46,60 @@ export class EdinDoc<T = unknown> implements IEdinDoc<T> {
 	#updateQueue: Operation[] = [];
 	#updateTimeout: ReturnType<typeof setTimeout> | null = null;
 	
-	/**
-	 * Updates document content.
-	 * @param updater Content updater function.
-	 */
-	update(updater: (content: T) => void) {
-		const id = this.#edin.getClientId();
-		if (!id) throw new Error("Client id could not be retrieved");
-
-		const initialState = this.content;
-		const newState = produce(initialState, updater);
-		const changes = createPatch(initialState, newState);
-		this.setState(newState);
-
-		// Send out updates every 50ms
+	#batchUpdate(changes: Operation[], batchTime: number) {
 		this.#updateQueue.push(...changes);
 		if (!this.#updateTimeout) {
 			this.#updateTimeout = setTimeout(() => {
 				this.version++;
 				this.#updateTimeout = null;
-
-				this.#edin.updateDocument({
-					issuerId: id,
-					docId: this.id,
-					ops: this.#updateQueue,
-					time: new Date().toISOString(),
-					version: this.version
-				}).catch((e) => {
-					console.error(`Failed to update document ${this.id}`);
-				});
-
+				this.#normalUpdate(this.#updateQueue);
 				this.#updateQueue = [];
-			}, 50);
+			}, batchTime);
+		}
+	}
+
+	#normalUpdate(changes: Operation[]) {
+		this.version++;
+		this.#edin.updateDocument({
+			id: this.id,
+			patch: changes,
+			version: this.version
+		}).catch((e) => {
+			this.#edin.getDocument(this.id, this.content as EdinDoc);
+		});
+	}
+
+	/**
+	 * Updates document content.
+	 * @param updater Content updater function.
+	 */
+	update(updater: (content: T) => void) {
+		const initialState = this.content;
+		const newState = produce(initialState, updater);
+		const changes = createPatch(initialState, newState);
+
+		this.version++;
+		this.content = newState;
+		this.notifySubscribers();
+
+		const batchTime = this.#edin.getConfig().batchTime;
+		if (batchTime) {
+			this.#batchUpdate(changes, batchTime);
+		} else {
+			this.#normalUpdate(changes);
 		}
 	}
 
 	/**
 	 * Destroys the document, clearing any updates and removing the document from server.
 	 */
-	destroy() {
+	remove() {
 		if (this.#updateTimeout) {
 			clearTimeout(this.#updateTimeout);
 			this.#updateTimeout = null;
 		}
+		
+		this.#eventListeners = [];
 		this.#edin.removeDocument(this.id);
 	}
 
@@ -104,15 +116,25 @@ export class EdinDoc<T = unknown> implements IEdinDoc<T> {
 		}
 	}
 
-	/**
-	 * Notifies all subscribed event listeners about document changes.
-	 * Does not send network request. Should only be used internally.
-	 * @param content New document content.
-	 */
-	setState(content: T) {
-		this.content = content;
+	applyUpdate(update: EdinUpdate) {
+		let error = false;
+		const updatedContent = produce(this.content, (draft) => {
+			const results = applyPatch(draft, update.patch);
+			error = results.every((result => result === null));
+		});
+
+		if (error) {
+
+		} else {
+			this.version = update.version;
+			this.content = updatedContent;
+			this.notifySubscribers();
+		}
+	}
+
+	notifySubscribers() {
 		this.#eventListeners.forEach((handler) => {
-			handler(content);
+			handler(this.content);
 		});
 	}
 }

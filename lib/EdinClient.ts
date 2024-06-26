@@ -61,7 +61,8 @@ export class EdinClient {
 			this.backend.getDocument(identifier, sanitizedContent as object).then((serverDoc) => {
 				if (serverDoc) {
 					doc.version = serverDoc.version;
-					doc.setState(serverDoc.content as T);
+					doc.content = serverDoc.content as T;
+					doc.notifySubscribers();
 				}
 			});
 		}
@@ -78,29 +79,30 @@ export class EdinClient {
 	}
 
 	async #updateDesynced(doc: EdinDoc, update: EdinUpdate) {
-		this.backend.getDocument(update.docId, {}).then((serverDoc) => {
+		this.backend.getDocument(update.id, {}).then((serverDoc) => {
 			const updatedContent = produce(doc.content, (draft) => {
 				Object.apply(draft, serverDoc.content);
 			});
-			doc.setState(updatedContent);
+
+			doc.content = updatedContent;
 			doc.version = serverDoc.version;
+			doc.notifySubscribers();
 		});
 	}
 
 	async onDocumentUpdated(update: EdinUpdate): Promise<void> {
-		if (!this.docs.has(update.docId) || update.ops.length === 0) {
+		if (!this.docs.has(update.id) || update.patch.length === 0) {
 			return;
 		}
 
-		const doc = this.docs.get(update.docId)!;
+		const doc = this.docs.get(update.id)!;
 
+		if (doc.version === update.version) {
+			return;
+		}
+		
 		if (doc.version + 1 === update.version) {
-			// Version is OK. No desync here
-			const updatedContent = produce(doc.content, (draft) => {
-				applyPatch(draft, update.ops);
-			});
-			doc.setState(updatedContent);
-			doc.version = update.version;
+			doc.applyUpdate(update);
 		} else {
 			this.#updateDesynced(doc, update);
 		}

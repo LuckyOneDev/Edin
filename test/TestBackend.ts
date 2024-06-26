@@ -1,17 +1,22 @@
 import { applyPatch } from "rfc6902";
-import { EdinBackend } from "../lib/EdinBackend";
+import { EdinBackend, EdinConfig } from "../lib/EdinBackend";
 import { EdinDoc, IEdinDoc } from "../lib/EdinDoc";
 import { EdinUpdate } from "../lib/EdinUpdate";
 import { produce } from "immer";
 
 export class TestBackend implements EdinBackend {
 	id: string;
-	docs: Map<string, IEdinDoc> = new Map();
+	storage: Map<string, IEdinDoc> = new Map();
 	updateListeners: ((update: EdinUpdate) => void)[] = [];
 	removeListeners: ((identifier: string) => void)[] = [];
 
 	constructor() {
 		this.id = Math.random().toString(36).slice(2);
+	}
+	getConfig(): EdinConfig {
+		return {
+			batchTime: 0
+		}
 	}
 
 	getClientId(): string | null {
@@ -19,27 +24,27 @@ export class TestBackend implements EdinBackend {
 	}
 
 	getDocument(identifier: string, content: object): Promise<EdinDoc> {
-		if (this.docs.has(identifier)) {
-			return Promise.resolve(this.docs.get(identifier) as EdinDoc);
+		if (this.storage.has(identifier)) {
+			return Promise.resolve(this.storage.get(identifier) as EdinDoc);
 		}
 		const doc = new EdinDoc(this, identifier, content);
-		this.docs.set(identifier, doc);
+		this.storage.set(identifier, doc);
 		return Promise.resolve(doc as EdinDoc);
 	}
 
 	removeDocument(identifier: string): Promise<void> {
-		this.docs.delete(identifier);
+		this.storage.delete(identifier);
 		this.removeListeners.forEach((listener) => listener(identifier));
 		return Promise.resolve();
 	}
 
 	updateDocument(update: EdinUpdate): Promise<void> {
-		const doc = this.docs.get(update.docId);
+		const doc = this.storage.get(update.id);
 
 		if (doc) {
 			let result: ReturnType<typeof applyPatch> = [];
 			const newState = produce(doc.content, (draft) => {
-				result = applyPatch(draft, update.ops);
+				result = applyPatch(draft, update.patch);
 			});
 
 			if (!result.every(v => v === null)) {

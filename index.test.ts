@@ -12,7 +12,7 @@ describe("Basic", () => {
 		const doc = Edin.doc("test", { test: 9 });
 		return new Promise<void>((resolve) => {
 			doc.subscribe((content) => {
-				const serverContent = backend.docs.get("test")?.content as { test: number };
+				const serverContent = backend.storage.get("test")?.content as { test: number };
 				expect(serverContent.test).toBe(9);
 				resolve();
 			});
@@ -21,7 +21,7 @@ describe("Basic", () => {
 
 	test("Existing data should be loaded from server", () => {
 		const backend = new TestBackend();
-		backend.docs.set("test", {
+		backend.storage.set("test", {
 			id: "test",
 			version: 4,
 			content: { test: 2 }
@@ -49,7 +49,7 @@ describe("Basic", () => {
 
 		return new Promise<void>((resolve) => {
 			backend.updateListeners.push((update) => {
-				const serverContent = backend.docs.get("test")?.content as { test: number };
+				const serverContent = backend.storage.get("test")?.content as { test: number };
 				expect(serverContent.test).toBe(9);
 				resolve();
 			});
@@ -68,12 +68,12 @@ describe("Basic", () => {
 
 		return new Promise<void>((resolve) => {
 			backend.removeListeners.push((update) => {
-				const serverContent = backend.docs.get("test");
+				const serverContent = backend.storage.get("test");
 				expect(serverContent).toBeFalsy();
 				resolve();
 			});
 
-			doc.destroy();
+			doc.remove();
 		})
 	});
 
@@ -89,13 +89,9 @@ describe("Basic", () => {
 		const doc2 = Edin2.doc("test", { test: 0 });
 
 		return new Promise<void>((resolve) => {
-			let first = true;
 			doc2.subscribe((content) => {
-				if (!first) {
-					expect(content.test).toBe(9);
-					resolve();
-				}
-				first = false;
+				expect(content.test).toBe(9);
+				resolve();
 			});
 			
 			doc1.update((content) => {
@@ -108,7 +104,7 @@ describe("Basic", () => {
 describe("Zustand", () => {
 	test("Zustand should sync data from server", () => {
 		const backend = new TestBackend();
-		backend.docs.set("test", {
+		backend.storage.set("test", {
 			id: "test",
 			version: 4,
 			content: { test: 2 }
@@ -147,7 +143,7 @@ describe("Zustand", () => {
 
 		return new Promise<void>((resolve) => {
 			backend.updateListeners.push((update) => {
-				const serverContent = backend.docs.get("test")?.content as { test: number };
+				const serverContent = backend.storage.get("test")?.content as { test: number };
 				expect(serverContent.test).toBe(9);
 				resolve();
 			});
@@ -171,7 +167,7 @@ describe("Zustand", () => {
 
 		return new Promise<void>((resolve) => {
 			backend.updateListeners.push((update) => {
-				const serverContent = backend.docs.get("test")?.content as { test: number };
+				const serverContent = backend.storage.get("test")?.content as { test: number };
 				expect(serverContent.test).toBe(9);
 				resolve();
 			});
@@ -200,12 +196,10 @@ describe("Zustand", () => {
 			});
 			
 			backend.updateDocument({
-				docId: "test",
-				ops: [
+				id: "test",
+				patch: [
 					{ op: "replace", path: "/test", value: 9 }
 				],
-				issuerId: "test",
-				time: new Date().toISOString(),
 				version: 5
 			});
 		})

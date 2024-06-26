@@ -3,18 +3,19 @@ import { EdinUpdate } from "./EdinUpdate";
 import { EdinDoc } from "./EdinDoc";
 import { EdinClient } from "./EdinClient";
 
+export interface EdinConfig {
+	/**
+	 * If batchTime is set outgoing update requests would be batched by time in ms.
+	 * Update request won't be sent more often than batchTime milliseconds.
+	 * It's good for performance, but bad for latency.
+	 */
+	batchTime?: number
+}
+
 /**
  * Backend for Edin.
  */
-
 export interface EdinBackend {
-	/**
-	 * Returns client id unique for each client.
-	 * Id is used for deduplication of updates.
-	 * It also can be used to manage access to backend.
-	 */
-	getClientId(): string | null;
-
 	/**
 	 * Creates new document. If document already exists, retrieves it.
 	 * @param identifier Document identifier.
@@ -44,4 +45,9 @@ export interface EdinBackend {
 	 * Binds Edin remove listener.
 	 */
 	bindRemoveListener(listener: typeof EdinClient.prototype.onDocumentRemoved): void;
+
+	/**
+	 * Returns Edin config.
+	 */
+	getConfig(): EdinConfig;
 }

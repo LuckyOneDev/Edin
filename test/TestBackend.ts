@@ -1,7 +1,7 @@
 import { applyPatch } from "rfc6902";
-import { EdinBackend, EdinConfig } from "../lib/EdinBackend";
-import { EdinDoc, IEdinDoc } from "../lib/EdinDoc";
-import { EdinUpdate } from "../lib/EdinUpdate";
+import { EdinBackend, EdinConfig } from "../src/EdinBackend";
+import { EdinDoc, IEdinDoc } from "../src/EdinDoc";
+import { EdinUpdate } from "../src/EdinUpdate";
 import { produce } from "immer";
 
 export class TestBackend implements EdinBackend {

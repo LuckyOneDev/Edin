@@ -1,7 +1,7 @@
-import { EdinBackend, EdinConfig } from "./lib/EdinBackend";
-import { EdinDoc, IEdinDoc } from "./lib/EdinDoc";
-import { EdinClient } from "./lib/EdinClient";
-import { EdinUpdate } from "./lib/EdinUpdate";
+import { EdinBackend, EdinConfig } from "./src/EdinBackend";
+import { EdinDoc, IEdinDoc } from "./src/EdinDoc";
+import { EdinClient } from "./src/EdinClient";
+import { EdinUpdate } from "./src/EdinUpdate";
 
 export {
 	EdinClient,

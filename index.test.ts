@@ -1,5 +1,5 @@
 import { describe, expect, test } from '@jest/globals';
-import { EdinClient } from "./lib/EdinClient";
+import { EdinClient } from "./src/EdinClient";
 import { TestBackend } from "./test/TestBackend";
 import { create } from 'zustand';
 import { edin } from './integration/zustand';

@@ -2,15 +2,19 @@
   "name": "edin",
   "version": "0.1.4",
   "description": "Backend and frontend agnostic synchronization library",
-  "main": "index.ts",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
   "repository": "https://github.com/LuckyOneDev/Edin",
   "scripts": {
-    "test": "jest"
+    "test": "jest",
+    "prepublish": "tsc",
+    "build": "tsc"
   },
   "keywords": [
     "realtime",
     "sync",
-    "synchronization"
+    "synchronization",
+    "edin"
   ],
   "author": "LuckyOne",
   "license": "ISC",

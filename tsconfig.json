@@ -3,7 +3,8 @@
 		"lib": [
 			"ESNext",
 		],
-		"outDir": "lib",
+		"declaration": true,
+		"outDir": "dist",
 		"removeComments": true,
 		"target": "ES6",
 		"baseUrl": "./",

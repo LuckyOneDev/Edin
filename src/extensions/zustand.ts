@@ -10,11 +10,7 @@ export const edin = <T>(stateCreator: StateCreator<T>, Edin: EdinClient, identif
 
 		const patchedSet: typeof set = (partial) => {
 			set(partial);
-			doc.update((content) => {
-				// Getting rid of functions 
-				const newContent = JSON.parse(JSON.stringify(get()));
-				Object.assign(content as object, newContent);
-			});
+			doc.update(get);
 		};
 
 		doc.subscribe((content) => {

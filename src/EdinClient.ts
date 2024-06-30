@@ -53,6 +53,11 @@ export class EdinClient {
 	queue: (() => void)[] = [];
 
 	doc<T>(identifier: string, content: T): EdinDoc<T> {
+		// Look for existing document
+		if (this.docs.has(identifier)) {
+			return this.docs.get(identifier) as EdinDoc<T>;
+		}
+
 		// Get rid of unserializable state
 		const sanitizedContent = JSON.parse(JSON.stringify(content));
 		const doc = new EdinDoc<T>(this.backend, identifier, sanitizedContent);
@@ -78,15 +83,15 @@ export class EdinClient {
 		return doc;
 	}
 
-	async #updateDesynced(doc: EdinDoc, update: EdinUpdate) {
-		this.backend.getDocument(update.id, {}).then((serverDoc) => {
-			const updatedContent = produce(doc.content, (draft) => {
-				Object.apply(draft, serverDoc.content);
-			});
+	async #updateDesynced(localDoc: EdinDoc) {
+		this.backend.getDocument(localDoc.id, {}).then((serverDoc) => {
+			if (!serverDoc) {
+				return;
+			}
 
-			doc.content = updatedContent;
-			doc.version = serverDoc.version;
-			doc.notifySubscribers();
+			localDoc.content = serverDoc.content;
+			localDoc.version = serverDoc.version;
+			localDoc.notifySubscribers();
 		});
 	}
 
@@ -100,11 +105,12 @@ export class EdinClient {
 		if (doc.version === update.version) {
 			return;
 		}
-		
+
+		// If version is not equal to server version, send request to server
 		if (doc.version + 1 === update.version) {
 			doc.applyUpdate(update);
 		} else {
-			this.#updateDesynced(doc, update);
+			this.#updateDesynced(doc);
 		}
 	}
 

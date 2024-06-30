@@ -1,4 +1,4 @@
-import { produce } from "immer";
+import { Draft, produce } from "immer";
 import { Operation, applyPatch, createPatch } from "rfc6902";
 import { EdinBackend } from "./EdinBackend";
 import { EdinUpdate } from "./EdinUpdate";
@@ -36,21 +36,32 @@ export class EdinDoc<T = unknown> implements IEdinDoc {
 
 	#eventListeners: ((content: T) => void)[] = [];
 
-	constructor(edin: EdinBackend, identifier: string, content: T) {
+	constructor(edin: EdinBackend, identifier: string, content: T, version: number = 0) {
 		this.#edin = edin;
 		this.id = identifier;
 		this.content = content;
-		this.version = 0;
+		this.version = version;
 	}
 
 	#updateQueue: Operation[] = [];
 	#updateTimeout: ReturnType<typeof setTimeout> | null = null;
 	
-	#batchUpdate(changes: Operation[], batchTime: number) {
+	#batchUpdate(changes: Operation[]) {
+		const { batchTime, maxBatchSize } = this.#edin.getConfig();
 		this.#updateQueue.push(...changes);
+
+		if (maxBatchSize) {
+			if (JSON.stringify(this.#updateQueue).length >= maxBatchSize) {
+				clearTimeout(this.#updateTimeout);
+				this.#updateTimeout = null;
+				this.#normalUpdate(this.#updateQueue);
+				this.#updateQueue = [];
+				return;
+			}
+		}
+
 		if (!this.#updateTimeout) {
 			this.#updateTimeout = setTimeout(() => {
-				this.version++;
 				this.#updateTimeout = null;
 				this.#normalUpdate(this.#updateQueue);
 				this.#updateQueue = [];
@@ -73,18 +84,16 @@ export class EdinDoc<T = unknown> implements IEdinDoc {
 	 * Updates document content.
 	 * @param updater Content updater function.
 	 */
-	update(updater: (content: T) => void) {
+	update(updater: (content: T) => void | T) {
 		const initialState = this.content;
-		const newState = produce(initialState, updater);
+		const newState = JSON.parse(JSON.stringify(produce(initialState, updater))) as T;
 		const changes = createPatch(initialState, newState);
-
-		this.version++;
 		this.content = newState;
 		this.notifySubscribers();
 
-		const batchTime = this.#edin.getConfig().batchTime;
+		const { batchTime } = this.#edin.getConfig();
 		if (batchTime) {
-			this.#batchUpdate(changes, batchTime);
+			this.#batchUpdate(changes);
 		} else {
 			this.#normalUpdate(changes);
 		}
@@ -117,15 +126,13 @@ export class EdinDoc<T = unknown> implements IEdinDoc {
 	}
 
 	applyUpdate(update: EdinUpdate) {
-		let error = false;
+		let ok = false;
 		const updatedContent = produce(this.content, (draft) => {
 			const results = applyPatch(draft, update.patch);
-			error = results.every((result => result === null));
+			ok = results.every((result => result === null));
 		});
 
-		if (error) {
-
-		} else {
+		if (ok) {
 			this.version = update.version;
 			this.content = updatedContent;
 			this.notifySubscribers();

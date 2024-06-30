@@ -9,7 +9,8 @@ export interface EdinConfig {
 	 * Update request won't be sent more often than batchTime milliseconds.
 	 * It's good for performance, but bad for latency.
 	 */
-	batchTime?: number
+	batchTime?: number,
+	maxBatchSize?: number
 }
 
 /**

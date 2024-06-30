@@ -10,13 +10,16 @@ export class TestBackend implements EdinBackend {
 	updateListeners: ((update: EdinUpdate) => void)[] = [];
 	removeListeners: ((identifier: string) => void)[] = [];
 
+	config: EdinConfig = {
+		batchTime: 0
+	}
+
 	constructor() {
 		this.id = Math.random().toString(36).slice(2);
 	}
+
 	getConfig(): EdinConfig {
-		return {
-			batchTime: 0
-		}
+		return this.config;
 	}
 
 	getClientId(): string | null {

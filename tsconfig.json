@@ -6,17 +6,17 @@
 		"declaration": true,
 		"outDir": "dist",
 		"removeComments": true,
-		"target": "ES6",
+		"target": "ESNext",
 		"baseUrl": "./",
 		"esModuleInterop": true, 
-		"moduleResolution": "node",
+		"moduleResolution": "Node",
 		"paths": {},
 		"sourceMap": true, 
 		"sourceRoot": "/", 
 		"alwaysStrict": true,
 	},
 	"include": [
-		"./**/*.ts"
+		"./src/**/*"
 	],
 	"exclude": [
 		"node_modules/**/*"

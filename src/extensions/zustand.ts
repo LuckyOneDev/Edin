@@ -1,5 +1,5 @@
 import { StateCreator } from "zustand";
-import { EdinClient } from "../src/EdinClient";
+import { EdinClient } from "../EdinClient.js";
 
 // Middleware for synchronizing zustand store with Edin.
 export const edin = <T>(stateCreator: StateCreator<T>, Edin: EdinClient, identifier: string): StateCreator<T> => {

@@ -2,7 +2,7 @@ import { describe, expect, test } from '@jest/globals';
 import { EdinClient } from "./src/EdinClient";
 import { TestBackend } from "./test/TestBackend";
 import { create } from 'zustand';
-import { edin } from './integration/zustand';
+import { edin } from './src/extensions/zustand';
 
 describe("Basic", () => {
 	test("New data should be put to server", () => {
@@ -96,6 +96,32 @@ describe("Basic", () => {
 			
 			doc1.update((content) => {
 				content.test = 9
+			});
+		})
+	});
+});
+
+describe("Batching", () => {
+	test("Data should be updated on server with batching", () => {
+		const backend = new TestBackend();
+		backend.config.batchTime = 15;
+		const Edin = new EdinClient(backend);
+		Edin.start();
+		const doc = Edin.doc("test", { test1: 6, test2: 6 });
+
+		return new Promise<void>((resolve) => {
+			backend.updateListeners.push((update) => {
+				const serverContent = backend.storage.get("test")?.content as { test1: number, test2: number };
+				expect(serverContent.test1).toBe(-5);
+				expect(serverContent.test2).toBe(1000);
+				resolve();
+			});
+
+			doc.update((content) => {
+				content.test1 = -5
+			});
+			doc.update((content) => {
+				content.test2 = 1000
 			});
 		})
 	});

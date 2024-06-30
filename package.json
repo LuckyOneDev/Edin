@@ -1,9 +1,17 @@
 {
   "name": "edin",
   "version": "0.1.4",
-  "description": "Backend and frontend agnostic synchronization library",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
+  "description": "Stack agnostic synchronization library",
+  "exports": {
+	".": {
+	  "default": "./dist/index.js",
+	  "types": "./dist/index.d.ts"
+	},
+	"./extensions/zustand" : {
+		"default": "./dist/extensions/zustand.js",
+		"types": "./dist/extensions/zustand.d.ts"
+	}
+  },
   "repository": "https://github.com/LuckyOneDev/Edin",
   "scripts": {
     "test": "jest",

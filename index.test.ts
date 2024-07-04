@@ -3,6 +3,7 @@ import { EdinClient } from "./src/EdinClient";
 import { TestBackend } from "./test/TestBackend";
 import { create } from 'zustand';
 import { edin } from './src/extensions/zustand';
+import { produce } from 'immer';
 
 describe("Basic", () => {
 	test("New data should be put to server", () => {
@@ -42,7 +43,7 @@ describe("Basic", () => {
 
 	test("Data should be updated on server", () => {
 		const backend = new TestBackend();
-		
+
 		const Edin = new EdinClient(backend);
 		Edin.start();
 		const doc = Edin.doc("test", { test: 6 });
@@ -54,9 +55,9 @@ describe("Basic", () => {
 				resolve();
 			});
 
-			doc.update((content) => {
+			doc.update(produce((content) => {
 				content.test = 9
-			});
+			}));
 		})
 	});
 
@@ -81,7 +82,7 @@ describe("Basic", () => {
 		const backend = new TestBackend();
 		const Edin1 = new EdinClient(backend);
 		const Edin2 = new EdinClient(backend);
-		
+
 		Edin1.start();
 		Edin2.start();
 
@@ -93,10 +94,10 @@ describe("Basic", () => {
 				expect(content.test).toBe(9);
 				resolve();
 			});
-			
-			doc1.update((content) => {
+
+			doc1.update(produce((content) => {
 				content.test = 9
-			});
+			}));
 		})
 	});
 });
@@ -117,12 +118,12 @@ describe("Batching", () => {
 				resolve();
 			});
 
-			doc.update((content) => {
+			doc.update(produce((content) => {
 				content.test1 = -5
-			});
-			doc.update((content) => {
+			}));
+			doc.update(produce((content) => {
 				content.test2 = 1000
-			});
+			}));
 		})
 	});
 });
@@ -156,10 +157,10 @@ describe("Zustand", () => {
 
 	test("Zustand should update data on server (setState)", () => {
 		const backend = new TestBackend();
-		
+
 		const Edin = new EdinClient(backend);
 		Edin.start();
-		
+
 		const testStore = create<{ test: number, setTest: (value: number) => void }>(edin((set) => ({
 			test: 0,
 			setTest: (value: number) => {
@@ -174,16 +175,16 @@ describe("Zustand", () => {
 				resolve();
 			});
 
-			testStore.setState({ test: 9 })
+			testStore.setState({ test: 9 });
 		})
 	});
 
 	test("Zustand should update data on server (setter method)", () => {
 		const backend = new TestBackend();
-		
+
 		const Edin = new EdinClient(backend);
 		Edin.start();
-		
+
 		const testStore = create<{ test: number, setTest: (value: number) => void }>(edin((set) => ({
 			test: 0,
 			setTest: (value: number) => {
@@ -204,10 +205,10 @@ describe("Zustand", () => {
 
 	test("Zustand should recieve updates from server", () => {
 		const backend = new TestBackend();
-		
+
 		const Edin = new EdinClient(backend);
 		Edin.start();
-		
+
 		const testStore = create<{ test: number, setTest: (value: number) => void }>(edin((set) => ({
 			test: 0,
 			setTest: (value: number) => {
@@ -220,7 +221,7 @@ describe("Zustand", () => {
 				expect(state.test).toBe(9);
 				resolve();
 			});
-			
+
 			backend.updateDocument({
 				id: "test",
 				patch: [

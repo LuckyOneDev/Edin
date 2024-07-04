@@ -1,6 +1,5 @@
-import { Operation, applyPatch } from "rfc6902";
 import { EdinUpdate } from "./EdinUpdate";
-import { EdinDoc } from "./EdinDoc";
+import { EdinDocData } from "./EdinDocData";
 import { EdinClient } from "./EdinClient";
 
 export interface EdinConfig {
@@ -22,7 +21,7 @@ export interface EdinBackend {
 	 * @param identifier Document identifier.
 	 * @param content Default document content.
 	 */
-	getDocument(identifier: string, content: object): Promise<EdinDoc>;
+	getDocument(identifier: string, content: object): Promise<EdinDocData>;
 
 	/**
 	 * Removes document from backend. Notifies Edin about removal.

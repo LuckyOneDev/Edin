@@ -1,12 +1,12 @@
 import { applyPatch } from "rfc6902";
 import { EdinBackend, EdinConfig } from "../src/EdinBackend";
-import { EdinDoc, IEdinDoc } from "../src/EdinDoc";
 import { EdinUpdate } from "../src/EdinUpdate";
 import { produce } from "immer";
+import { EdinDocData } from "../src/EdinDocData";
 
 export class TestBackend implements EdinBackend {
 	id: string;
-	storage: Map<string, IEdinDoc> = new Map();
+	storage: Map<string, EdinDocData> = new Map();
 	updateListeners: ((update: EdinUpdate) => void)[] = [];
 	removeListeners: ((identifier: string) => void)[] = [];
 
@@ -26,13 +26,18 @@ export class TestBackend implements EdinBackend {
 		return this.id;
 	}
 
-	getDocument(identifier: string, content: object): Promise<EdinDoc> {
+	getDocument(identifier: string, content: object): Promise<EdinDocData> {
 		if (this.storage.has(identifier)) {
-			return Promise.resolve(this.storage.get(identifier) as EdinDoc);
+			return Promise.resolve(this.storage.get(identifier)!);
 		}
-		const doc = new EdinDoc(this, identifier, content);
+		const doc = {
+			id: identifier,
+			content: content,
+			version: 0
+		};
+
 		this.storage.set(identifier, doc);
-		return Promise.resolve(doc as EdinDoc);
+		return Promise.resolve(doc);
 	}
 
 	removeDocument(identifier: string): Promise<void> {

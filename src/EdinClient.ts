@@ -1,14 +1,11 @@
-import { applyPatch } from "rfc6902";
 import { EdinBackend } from "./EdinBackend";
 import { EdinDoc } from "./EdinDoc";
 import { EdinUpdate } from "./EdinUpdate";
-import { produce } from "immer";
 
 /**
  * Main Edin object.
  * Every document is managed here.
  */
-
 export class EdinClient {
 	/**
 	* Local index of documents.
@@ -25,6 +22,11 @@ export class EdinClient {
 	 */
 	isReady: boolean = false;
 
+	/**
+	 * Doc request queue.
+	 */
+	queue: (() => void)[] = [];
+
 	constructor(backend: EdinBackend) {
 		this.backend = backend;
 		backend.bindUpdateListener(this.onDocumentUpdated.bind(this));
@@ -40,19 +42,38 @@ export class EdinClient {
 		this.queue = [];
 	}
 
-
 	/**
-	 * Clears all documents and stops sync.
+	 * Stops handling of requests.
 	 */
-	clear(): void {
-		this.docs.clear();
+	stop(): void {
 		this.isReady = false;
 	}
 
-	// Doc request queue
-	queue: (() => void)[] = [];
+	private syncDoc<T>(identifier: string, sanitizedContent: T) {
+		const doc = this.docs.get(identifier);
+		const request = () => {
+			this.backend.getDocument(identifier, sanitizedContent as object).then((serverDoc) => {
+				if (serverDoc) {
+					doc.overwrite(serverDoc);
+				}
+			});
+		}
 
-	doc<T>(identifier: string, content: T): EdinDoc<T> {
+		if (this.isReady) {
+			request();
+		} else {
+			this.queue.push(request);
+		}
+	}
+
+	/**
+	 * Creates new pure EdinDoc and initializes it thus creating it
+	 * or loading it from server.
+	 * @param identifier Document id. 
+	 * @param content Default document content. Will be ignored if document already exists.
+	 * @returns Edin Document.
+	 */
+	doc<T extends object>(identifier: string, content: T): EdinDoc<T> {
 		// Look for existing document
 		if (this.docs.has(identifier)) {
 			return this.docs.get(identifier) as EdinDoc<T>;
@@ -61,27 +82,44 @@ export class EdinClient {
 		// Get rid of unserializable state
 		const sanitizedContent = JSON.parse(JSON.stringify(content));
 		const doc = new EdinDoc<T>(this.backend, identifier, sanitizedContent);
-
-		const request = () => {
-			this.backend.getDocument(identifier, sanitizedContent as object).then((serverDoc) => {
-				if (serverDoc) {
-					doc.version = serverDoc.version;
-					doc.content = serverDoc.content as T;
-					doc.notifySubscribers();
-				}
-			});
-		}
-
 		this.docs.set(identifier, doc as EdinDoc);
 
-		if (this.isReady) {
-			request();
-		} else {
-			this.queue.push(request);
-		}
+		// Sync doc when possible.
+		this.syncDoc(identifier, sanitizedContent);
 
 		return doc;
 	}
+
+	/**
+	 * Creates new transient EdinDoc and initializes it thus creating it
+	 * or loading it from server.
+	 * @param identifier Document id. 
+	 * @param get Should return default/current state
+	 * @param set Should set current state 
+	 */
+	transientDoc<T extends object>(identifier: string, get: () => T, set: (content: T) => void, initialState?: T) {
+		// Look for existing document
+		if (this.docs.has(identifier)) {
+			return this.docs.get(identifier) as EdinDoc<T>;
+		}
+
+		const doc = new EdinDoc<T>(this.backend, identifier, { get, set });
+		this.docs.set(identifier, doc as EdinDoc);
+
+		// Get rid of unserializable state
+		let sanitizedContent;
+		if (initialState) {
+			sanitizedContent = JSON.parse(JSON.stringify(initialState));
+		} else {
+			sanitizedContent = JSON.parse(JSON.stringify(get()));
+		}
+
+		// Sync doc when possible.
+		this.syncDoc(identifier, sanitizedContent);
+
+		return doc;
+	}
+
 
 	async #updateDesynced(localDoc: EdinDoc) {
 		this.backend.getDocument(localDoc.id, {}).then((serverDoc) => {
@@ -89,9 +127,7 @@ export class EdinClient {
 				return;
 			}
 
-			localDoc.content = serverDoc.content;
-			localDoc.version = serverDoc.version;
-			localDoc.notifySubscribers();
+			localDoc.overwrite(serverDoc);
 		});
 	}
 

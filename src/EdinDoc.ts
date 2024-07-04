@@ -2,21 +2,16 @@ import { Draft, produce } from "immer";
 import { Operation, applyPatch, createPatch } from "rfc6902";
 import { EdinBackend } from "./EdinBackend";
 import { EdinUpdate } from "./EdinUpdate";
-
-export interface IEdinDoc {
-	id: string;
-	version: number;
-	content: unknown;
-}
+import { EdinDocData } from "./EdinDocData";
 
 /**
  * Atomic syncronised structure.
  */
-export class EdinDoc<T = unknown> implements IEdinDoc {
+export class EdinDoc<T extends object = object> implements EdinDocData<T> {
 	/**
 	 * Document identifier.
 	 */
-	id: string;
+	readonly id: string;
 
 	/**
 	 * Current document version.
@@ -27,89 +22,119 @@ export class EdinDoc<T = unknown> implements IEdinDoc {
 	/**
 	 * Document content. Actual useful data.
 	 */
-	content: T;
+	private _content: T;
+	private getter: () => T;
+	private setter: (content: T) => void;
+
+	public get content(): T {
+		return this.getter();
+	}
+	
+	private set content(value: T) {
+		this.setter(value);
+	}
 
 	/**
 	 * Edin backend.
 	 */
-	#edin: EdinBackend;
+	private edin: EdinBackend;
 
-	#eventListeners: ((content: T) => void)[] = [];
+	/**
+	 * Subscriptions to update events.
+	 */
+	private updateListeners: ((content: T) => void)[] = [];
 
-	constructor(edin: EdinBackend, identifier: string, content: T, version: number = 0) {
-		this.#edin = edin;
+	constructor(edin: EdinBackend, identifier: string, content: T | {
+		get: () => T,
+		set: (content: T) => void
+	}, version: number = 0) {
+		this.edin = edin;
 		this.id = identifier;
-		this.content = content;
 		this.version = version;
+		if ("get" in content) {
+			this.getter = content.get;
+			this.setter = content.set;
+		} else {
+			this._content = content;
+			this.getter = () => this._content;
+			this.setter = (val) => this._content = val;
+		}
 	}
 
-	#updateQueue: Operation[] = [];
-	#updateTimeout: ReturnType<typeof setTimeout> | null = null;
-	
-	#batchUpdate(changes: Operation[]) {
-		const { batchTime, maxBatchSize } = this.#edin.getConfig();
-		this.#updateQueue.push(...changes);
+	private updateQueue: Operation[] = [];
+	private updateTimeout: ReturnType<typeof setTimeout> | null = null;
+
+	private batchUpdate(changes: Operation[]) {
+		const { batchTime, maxBatchSize } = this.edin.getConfig();
+		this.updateQueue.push(...changes);
 
 		if (maxBatchSize) {
-			if (JSON.stringify(this.#updateQueue).length >= maxBatchSize) {
-				clearTimeout(this.#updateTimeout);
-				this.#updateTimeout = null;
-				this.#normalUpdate(this.#updateQueue);
-				this.#updateQueue = [];
+			if (JSON.stringify(this.updateQueue).length >= maxBatchSize) {
+				clearTimeout(this.updateTimeout);
+				this.updateTimeout = null;
+				this.normalUpdate(this.updateQueue);
+				this.updateQueue = [];
 				return;
 			}
 		}
 
-		if (!this.#updateTimeout) {
-			this.#updateTimeout = setTimeout(() => {
-				this.#updateTimeout = null;
-				this.#normalUpdate(this.#updateQueue);
-				this.#updateQueue = [];
+		if (!this.updateTimeout) {
+			this.updateTimeout = setTimeout(() => {
+				this.updateTimeout = null;
+				this.normalUpdate(this.updateQueue);
+				this.updateQueue = [];
 			}, batchTime);
 		}
 	}
 
-	#normalUpdate(changes: Operation[]) {
+	private normalUpdate(changes: Operation[]) {
 		this.version++;
-		this.#edin.updateDocument({
+		this.edin.updateDocument({
 			id: this.id,
 			patch: changes,
 			version: this.version
 		}).catch((e) => {
-			this.#edin.getDocument(this.id, this.content as EdinDoc);
+			this.edin.getDocument(this.id, this.content as EdinDoc);
+		});
+	}
+
+
+	private notifySubscribers() {
+		this.updateListeners.forEach((handler) => {
+			handler(this.content);
 		});
 	}
 
 	/**
 	 * Updates document content.
-	 * @param updater Content updater function.
+	 * @param partial Content updater function.
 	 */
-	update(updater: (content: T) => void | T) {
+	update(partial: T | Partial<T> | ((state: T) => T | Partial<T>)) {
 		const initialState = this.content;
-		const newState = JSON.parse(JSON.stringify(produce(initialState, updater))) as T;
+		if (!initialState) throw new Error("Getter faield to retrieve valid data.");
+
+		const newState =
+			produce(initialState, (draft) => {
+				if (typeof partial === "function") {
+					const newState = partial(draft as T);
+					if (newState) {
+						Object.assign(draft, newState);
+					}
+				} else {
+					Object.assign(draft, partial);
+				}
+			});
+
 		const changes = createPatch(initialState, newState);
 		this.content = newState;
 		this.notifySubscribers();
 
-		const { batchTime } = this.#edin.getConfig();
+		const { batchTime } = this.edin.getConfig();
 		if (batchTime) {
-			this.#batchUpdate(changes);
+			this.batchUpdate(changes);
 		} else {
-			this.#normalUpdate(changes);
+			this.normalUpdate(changes);
 		}
-	}
-
-	/**
-	 * Destroys the document, clearing any updates and removing the document from server.
-	 */
-	remove() {
-		if (this.#updateTimeout) {
-			clearTimeout(this.#updateTimeout);
-			this.#updateTimeout = null;
-		}
-		
-		this.#eventListeners = [];
-		this.#edin.removeDocument(this.id);
 	}
 
 	/**
@@ -118,13 +143,30 @@ export class EdinDoc<T = unknown> implements IEdinDoc {
 	 * @returns Unsubscribe function.
 	 */
 	subscribe(handler: (content: T) => void): () => void {
-		this.#eventListeners.push(handler);
+		this.updateListeners.push(handler);
 		return () => {
 			// Remove the listener from the list of event listeners.
-			this.#eventListeners = this.#eventListeners.filter((listener) => listener !== handler);
+			this.updateListeners = this.updateListeners.filter((listener) => listener !== handler);
 		}
 	}
 
+	/**
+	 * Destroys the document, clearing any updates and removing the document from server.
+	 */
+	remove() {
+		if (this.updateTimeout) {
+			clearTimeout(this.updateTimeout);
+			this.updateTimeout = null;
+		}
+
+		this.updateListeners = [];
+		this.edin.removeDocument(this.id);
+	}
+
+	/**
+	 * Applies update to this document and notifies subscribers if update is successful.
+	 * If not, throws an exception.
+	 */
 	applyUpdate(update: EdinUpdate) {
 		let ok = false;
 		const updatedContent = produce(this.content, (draft) => {
@@ -132,16 +174,20 @@ export class EdinDoc<T = unknown> implements IEdinDoc {
 			ok = results.every((result => result === null));
 		});
 
-		if (ok) {
-			this.version = update.version;
-			this.content = updatedContent;
-			this.notifySubscribers();
-		}
+		if (!ok) throw new Error("Could not apply update");
+
+		this.version = update.version;
+		this.content = updatedContent;
+		this.notifySubscribers();
 	}
 
-	notifySubscribers() {
-		this.#eventListeners.forEach((handler) => {
-			handler(this.content);
-		});
+	/**
+	 * Overwrites document completely and notifies subscribers.
+	 * @param doc Edin Document Data.
+	 */
+	overwrite(doc: EdinDocData) {
+		this.content = doc.content as T;
+		this.version = doc.version;
+		this.notifySubscribers();
 	}
 }

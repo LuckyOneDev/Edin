@@ -4,6 +4,7 @@ import { TestBackend } from "./test/TestBackend";
 import { create } from 'zustand';
 import { edin } from './src/extensions/zustand';
 import { produce } from 'immer';
+import { easeInOutInterpolation, interpolate, linearInterpolation } from "./src/extensions/interpolate";
 
 describe("Basic", () => {
 	test("New data should be put to server", () => {
@@ -125,6 +126,103 @@ describe("Batching", () => {
 				content.test2 = 1000
 			}));
 		})
+	});
+});
+
+describe("Doc Config", () => {
+	test('updateMiddleware should work', () => {
+		const backend = new TestBackend();
+		const Edin = new EdinClient(backend);
+		Edin.start();
+
+		const doc = Edin.doc("test", { test1: 6, test2: 6 }, {
+			updateMiddleware(update) {
+				update.patch = update.patch.map(patch => {
+					if (patch.path === "/test1" && patch.op === "replace") {
+						patch.value = -500;
+					}
+					return patch;
+				});
+				return update;
+			},
+		});
+
+		return new Promise<void>(async (resolve) => {
+			await doc.ready();
+
+			doc.subscribe((state) => {
+				expect(state.test1).toBe(-500);
+				expect(state.test2).toBe(1000);
+				resolve();
+			});
+
+			backend.updateDocument({
+				id: "test",
+				patch: [
+					{
+						op: "replace",
+						path: "/test1",
+						value: 1
+					},
+					{
+						op: "replace",
+						path: "/test2",
+						value: 1000
+					}
+				],
+				version: 2
+			});
+		});
+	});
+
+	test('Interpolation middleware should work', () => {
+		const backend = new TestBackend();
+		const Edin = new EdinClient(backend);
+		Edin.start();
+
+		const doc = Edin.doc("test", { test1: 1, test2: 5 }, {
+			updateMiddleware: interpolate([
+				{
+					path: "/test1",
+					timeSpan: 10,
+					timeStep: 1,
+					fn: linearInterpolation,
+				}
+			]),
+		});
+
+		return new Promise<void>(async (resolve) => {
+			await doc.ready();
+			
+			// ! This test in non-deterministic so it might fail.
+			// TODO: Make it deterministic.
+			setTimeout(() => {
+				expect(doc.content.test1).toBeGreaterThanOrEqual(5);
+				resolve();
+			}, 5);
+
+			setTimeout(() => {
+				expect(doc.content.test1).toBeGreaterThanOrEqual(8);
+				resolve();
+			}, 8);
+
+			setTimeout(() => {
+				expect(doc.content.test1).toBe(10);
+				resolve();
+			}, 25);
+
+			backend.updateDocument({
+				id: "test",
+				patch: [
+					{
+						path: "/test1",
+						op: "replace",
+						value: 100
+					},
+				],
+				version: 2
+			});
+		});
 	});
 });
 

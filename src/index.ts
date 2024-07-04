@@ -8,7 +8,7 @@ export {
 	EdinClient,
 	EdinBackend,
 	EdinDoc,
-	EdinDocData as IEdinDoc,
+	EdinDocData,
 	EdinUpdate,
 	EdinConfig,
 };

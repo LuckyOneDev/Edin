@@ -1,3 +1,4 @@
+import { DocConfig } from "./DocConfig";
 import { EdinBackend } from "./EdinBackend";
 import { EdinDoc } from "./EdinDoc";
 import { EdinUpdate } from "./EdinUpdate";
@@ -73,7 +74,7 @@ export class EdinClient {
 	 * @param content Default document content. Will be ignored if document already exists.
 	 * @returns Edin Document.
 	 */
-	doc<T extends object>(identifier: string, content: T): EdinDoc<T> {
+	doc<T extends object>(identifier: string, content: T, config?: DocConfig): EdinDoc<T> {
 		// Look for existing document
 		if (this.docs.has(identifier)) {
 			return this.docs.get(identifier) as EdinDoc<T>;
@@ -81,7 +82,7 @@ export class EdinClient {
 
 		// Get rid of unserializable state
 		const sanitizedContent = JSON.parse(JSON.stringify(content));
-		const doc = new EdinDoc<T>(this.backend, identifier, sanitizedContent);
+		const doc = new EdinDoc<T>(this.backend, identifier, sanitizedContent, 0, config);
 		this.docs.set(identifier, doc as EdinDoc);
 
 		// Sync doc when possible.
@@ -97,13 +98,13 @@ export class EdinClient {
 	 * @param get Should return default/current state
 	 * @param set Should set current state 
 	 */
-	transientDoc<T extends object>(identifier: string, get: () => T, set: (content: T) => void, initialState?: T) {
+	transientDoc<T extends object>(identifier: string, get: () => T, set: (content: T) => void, initialState?: T, config?: DocConfig) {
 		// Look for existing document
 		if (this.docs.has(identifier)) {
 			return this.docs.get(identifier) as EdinDoc<T>;
 		}
 
-		const doc = new EdinDoc<T>(this.backend, identifier, { get, set });
+		const doc = new EdinDoc<T>(this.backend, identifier, { get, set }, 0, config);
 		this.docs.set(identifier, doc as EdinDoc);
 
 		// Get rid of unserializable state

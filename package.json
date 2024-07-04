@@ -7,6 +7,10 @@
 	  "default": "./dist/index.js",
 	  "types": "./dist/index.d.ts"
 	},
+	"./extensions/" : {
+		"default": "./dist/extensions/index.js",
+		"types": "./dist/extensions/index.d.ts"
+	},
 	"./extensions/zustand" : {
 		"default": "./dist/extensions/zustand.js",
 		"types": "./dist/extensions/zustand.d.ts"

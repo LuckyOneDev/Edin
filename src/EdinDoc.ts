@@ -1,8 +1,9 @@
-import { Draft, produce } from "immer";
+import { produce } from "immer";
 import { Operation, applyPatch, createPatch } from "rfc6902";
 import { EdinBackend } from "./EdinBackend";
 import { EdinUpdate } from "./EdinUpdate";
 import { EdinDocData } from "./EdinDocData";
+import { DocConfig } from "./DocConfig";
 
 /**
  * Atomic syncronised structure.
@@ -29,7 +30,7 @@ export class EdinDoc<T extends object = object> implements EdinDocData<T> {
 	public get content(): T {
 		return this.getter();
 	}
-	
+
 	private set content(value: T) {
 		this.setter(value);
 	}
@@ -44,13 +45,17 @@ export class EdinDoc<T extends object = object> implements EdinDocData<T> {
 	 */
 	private updateListeners: ((content: T) => void)[] = [];
 
+	private config?: DocConfig;
+
 	constructor(edin: EdinBackend, identifier: string, content: T | {
 		get: () => T,
 		set: (content: T) => void
-	}, version: number = 0) {
+	}, version: number = 0, config?: DocConfig) {
 		this.edin = edin;
 		this.id = identifier;
 		this.version = version;
+		this.config = config;
+
 		if ("get" in content) {
 			this.getter = content.get;
 			this.setter = content.set;
@@ -167,7 +172,8 @@ export class EdinDoc<T extends object = object> implements EdinDocData<T> {
 	 * Applies update to this document and notifies subscribers if update is successful.
 	 * If not, throws an exception.
 	 */
-	applyUpdate(update: EdinUpdate) {
+	applyUpdate(iUpdate: EdinUpdate) {
+		const update = this.config?.updateMiddleware ? this.config.updateMiddleware(iUpdate, this) : iUpdate;
 		let ok = false;
 		const updatedContent = produce(this.content, (draft) => {
 			const results = applyPatch(draft, update.patch);
@@ -182,6 +188,18 @@ export class EdinDoc<T extends object = object> implements EdinDocData<T> {
 	}
 
 	/**
+	 * Apply patch without changing version. 
+	 * Should only be used in extensions for internals.
+	 */
+	applyPatch(patch: Operation[]) {
+		const updatedContent = produce(this.content, (draft) => {
+			applyPatch(draft, patch);
+		});
+		this.content = updatedContent;
+		this.notifySubscribers();
+	}
+
+	/**
 	 * Overwrites document completely and notifies subscribers.
 	 * @param doc Edin Document Data.
 	 */
@@ -189,5 +207,19 @@ export class EdinDoc<T extends object = object> implements EdinDocData<T> {
 		this.content = doc.content as T;
 		this.version = doc.version;
 		this.notifySubscribers();
+		this.promiseResolve();
+	}
+
+	private promiseResolve: () => void;
+	private readyPromise: Promise<void> = new Promise((resolve) => {
+		this.promiseResolve = resolve;
+	});
+	
+
+	/**
+	 * Resolves when this document is first synchronized with server.
+	 */
+	async ready() {
+		return this.readyPromise;
 	}
 }
